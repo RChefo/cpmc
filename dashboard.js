@@ -16,6 +16,7 @@
   const MAX_MESSAGE = 65536;          // broker MAX_MESSAGE_SIZE
   const WARN_MESSAGE = 50000;
   const MESSAGE_CAP = 500;            // broker sends the newest 500 messages of the session
+  const RENDER_STEP = 100;            // messages in the DOM at a time; 500 long ones take most of a second to lay out
   const MERGE_GAP_MS = 5 * 60 * 1000; // consecutive messages share one header within this gap
   const DIVIDER_GAP_MS = 15 * 60 * 1000;
   const POLL_MS = 5000;
@@ -522,6 +523,7 @@
       pinsOpen: false,
       confirmGroup: null,
       groupDraft: null,    // { peer, group } — a group chosen in the details column, not yet moved
+      renderLimit: RENDER_STEP, // newest messages rendered in the conversation; "Show earlier" adds more
     },
   };
   function clampWidth(w) { return Math.min(PANEL_MAX, Math.max(PANEL_MIN, Number.isFinite(w) ? Math.round(w) : PANEL_DEFAULT)); }
@@ -1411,6 +1413,8 @@
   let stickToBottom = true;
   let unseen = 0;
   let revealedId = null;          // touch: the message whose actions were revealed by a tap
+  let windowStartId = null;       // oldest rendered message, kept while the reader is scrolled up
+  function resetWindow() { state.ui.renderLimit = RENDER_STEP; windowStartId = null; }
 
   function visibleMessages(scopeOnly) {
     const d = state.data;
@@ -1466,13 +1470,29 @@
       return;
     }
     sigs.delete('timeline');
+    // Only the newest messages are in the DOM: long messages make 500 of them tens of thousands of elements, which took
+    // most of a second to lay out on every search. While the reader is scrolled up, the window keeps its first message,
+    // so arriving messages never pull text out from under them.
+    const nearBottom = timelineEl.scrollHeight - timelineEl.scrollTop - timelineEl.clientHeight < 80;
+    let start = Math.max(0, msgs.length - state.ui.renderLimit);
+    if (!nearBottom && !stickToBottom && windowStartId !== null) {
+      const at = msgs.findIndex((m) => m.id === windowStartId);
+      if (at >= 0 && at < start) start = at;
+    }
+    windowStartId = msgs[start].id;
     const items = [];
-    if (d.messages.length >= MESSAGE_CAP && !state.ui.selected && !q) {
+    if (start > 0) {
+      const more = Math.min(start, RENDER_STEP);
+      const label = q ? plural(more, 'earlier match', 'earlier matches') : plural(more, 'earlier message');
+      items.push({ key: 'earlier', sig: label + '|' + start, build: () => h('div', { class: 'timeline-earlier' },
+        h('button', { type: 'button', class: 'btn', 'data-action': 'show-earlier' }, 'Show ' + label),
+        h('span', { text: start + ' not shown' })) });
+    } else if (d.messages.length >= MESSAGE_CAP && !state.ui.selected && !q) {
       items.push({ key: 'intro', sig: 'cap', build: () => h('div', { class: 'timeline-intro' }, icon('info'), 'Showing the latest ' + MESSAGE_CAP + ' messages of this session; older ones are not loaded.') });
     }
     let prev = null;
     const pinned = state.D.pinnedIds;
-    for (const m of msgs) {
+    for (const m of start ? msgs.slice(start) : msgs) {
       const t = ms(m.sent_at);
       const gap = prev ? t - ms(prev.sent_at) : Infinity;
       const newDay = !prev || dayLabel(t) !== dayLabel(ms(prev.sent_at));
@@ -1492,7 +1512,6 @@
       prev = m;
     }
 
-    const nearBottom = timelineEl.scrollHeight - timelineEl.scrollTop - timelineEl.clientHeight < 80;
     const firstRender = seenIds === null;
     if (firstRender) seenIds = new Set();
     let added = 0;
@@ -1950,6 +1969,7 @@
     if (ui.selected && ui.selected.id === id) { clearScope(); return; }
     ui.selected = target(p);
     ui.groupDraft = null;
+    resetWindow();
     setRecipient(p);
     ui.ctxOpen = !mqContextDrawer.matches; // the docked column opens with the selection; the drawer waits for "Details"
     stickToBottom = true;
@@ -1961,6 +1981,7 @@
   function clearScope() {
     state.ui.selected = null;
     state.ui.ctxOpen = false;
+    resetWindow();
     stickToBottom = true;
     unseen = 0;
     render();
@@ -1990,6 +2011,10 @@
     if (!msg) { toast('That message is no longer in the loaded history.', 'warn'); return; }
     if (state.ui.search && !matches(msg, state.ui.search.trim().toLowerCase())) { state.ui.search = ''; $('search-input').value = ''; }
     if (state.ui.selected && !involves(msg, state.ui.selected)) { state.ui.selected = null; state.ui.ctxOpen = false; }
+    // An older message may be outside the rendered window: extend the window down to it.
+    const shown = visibleMessages(false);
+    const at = shown.findIndex((m) => m.id === id);
+    if (at >= 0) state.ui.renderLimit = Math.max(state.ui.renderLimit, shown.length - at);
     renderAll();
     const el = colEl.querySelector(attrSel('data-msg-id', id));
     if (!el) return;
@@ -2081,6 +2106,14 @@
       run('react:' + id + ':' + emoji, () => api('/react', body), { fail: "Couldn't update your reaction." });
     },
     'jump-to': (el) => jumpTo(Number(el.getAttribute('data-id'))),
+    'show-earlier': () => {
+      // Keep what is on screen in place while the earlier messages are added above it.
+      const fromBottom = timelineEl.scrollHeight - timelineEl.scrollTop;
+      state.ui.renderLimit += RENDER_STEP;
+      renderAll();
+      timelineEl.scrollTop = timelineEl.scrollHeight - fromBottom;
+      if (!colEl.querySelector('[data-action="show-earlier"]')) timelineEl.focus({ preventScroll: true }); // all shown now
+    },
     'toggle-pins': () => { state.ui.pinsOpen = !state.ui.pinsOpen; render(); },
     'task-filter': (el) => { state.ui.taskFilter = el.getAttribute('data-value'); render(); },
     'decision-filter': (el) => { state.ui.decisionFilter = el.getAttribute('data-value'); render(); },
@@ -2197,6 +2230,7 @@
     clearTimeout(searchTimer);
     state.ui.search = v;
     if (searchInput.value !== v) searchInput.value = v;
+    resetWindow();
     stickToBottom = true;
     render();
   }
@@ -2472,6 +2506,7 @@
       sigs.clear();
       knownProcs.clear();
       knownNames.clear();
+      resetWindow();
     }
     state.data = d;
     state.dataAt = Date.now();

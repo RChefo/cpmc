@@ -294,6 +294,43 @@ describe("Rendering", () => {
     expect(msg(3).querySelector(".msg-body")!.textContent).toBe(long);
   });
 
+  test("renders the newest 100 messages and adds earlier ones on request", async () => {
+    const state = fixture();
+    state.messages = Array.from({ length: 250 }, (_, k) => message(k + 1, k % 2 ? "a1" : "b1", k % 2 ? "b1" : "a1", `Message number ${k + 1}`));
+    state.pinned = [];
+    state.reactions = {};
+    await boot({ state });
+    const ids = () => $$("article.msg").map((a) => Number(a.dataset.msgId));
+    expect(ids()).toHaveLength(100);
+    expect(ids()[0]).toBe(151);
+    const more = $('[data-action="show-earlier"]');
+    expect(more.textContent).toBe("Show 100 earlier messages");
+    expect(more.parentElement!.textContent).toContain("150 not shown");
+    more.focus(); // a real click or keypress focuses the button; happy-dom's click() does not
+    await click(more);
+    expect(ids()).toHaveLength(200);
+    expect(document.activeElement === $('[data-action="show-earlier"]')).toBe(true); // focus stays on the control
+    await click($('[data-action="show-earlier"]'));
+    expect(ids()).toHaveLength(250);
+    expect($('[data-action="show-earlier"]')).toBeNull();
+    expect(document.activeElement === $("#timeline")).toBe(true);
+  });
+
+  test("search counts every match while rendering the newest; Jump reaches older messages", async () => {
+    const state = fixture();
+    state.messages = Array.from({ length: 250 }, (_, k) => message(k + 1, "a1", "b1", `Message number ${k + 1}`));
+    state.pinned = [{ ...state.messages[4], pinned: 1 }];
+    state.reactions = {};
+    await boot({ state });
+    await type($("#search-input") as HTMLInputElement, "number");
+    expect($("#search-count").textContent).toBe("250 matches");
+    expect($$("article.msg")).toHaveLength(100);
+    expect($('[data-action="show-earlier"]').textContent).toBe("Show 100 earlier matches");
+    await click($('#pins [data-action="jump-to"]')); // message 5, far outside the window
+    expect(msg(5)).toBeTruthy();
+    expect($$("article.msg")).toHaveLength(246); // the window now reaches down to it
+  });
+
   test("inputs that used to take seconds render quickly", async () => {
     const spaces = " ".repeat(60_000);
     const ticks = "x" + "`".repeat(1999); // a backtick run just under the inline limit: ~0.5-2.7 s per line before the fix
@@ -617,7 +654,7 @@ describe("Actions", () => {
     next.tasks[0].description = "Patch the handler and add a test"; // any change that rebuilds the list
     socket().push(next);
     await settle();
-    expect(document.activeElement).toBe(names()[1]!);
+    expect(document.activeElement === names()[1]).toBe(true); // booleans: a failing toBe on DOM nodes prints the whole window
   });
 
   test("a busy control keeps keyboard focus while its message is re-rendered", async () => {
@@ -626,7 +663,7 @@ describe("Actions", () => {
     pin.focus();
     await click(pin);
     const now = document.activeElement as HTMLElement;
-    expect(now).not.toBe(pin); // the message was rebuilt to show the busy state…
+    expect(now === pin).toBe(false); // the message was rebuilt to show the busy state…
     expect(now.closest("article")!.getAttribute("data-msg-id")).toBe("4"); // …and focus moved to its replacement
     expect(now.getAttribute("data-action")).toBe("pin");
     expect(now.getAttribute("aria-disabled")).toBe("true");

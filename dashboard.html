@@ -352,6 +352,7 @@
     .timeline:focus-visible { outline-offset: -2px; }
     .timeline-col { max-width: var(--measure); margin: 0 auto; padding: 0 24px; }
     .timeline-intro { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; color: var(--ink-3); font-size: 12.5px; }
+    .timeline-earlier { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px 12px; margin: 2px 0 10px; color: var(--ink-3); font-size: 12.5px; }
     .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0 8px; color: var(--ink-3); font-size: 12px; font-weight: 500; }
     .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
@@ -1223,7 +1224,7 @@
   </dialog>
 
   <!-- Bump ?v= whenever dashboard.js changes: the broker caches both files for an hour. -->
-  <script src="dashboard.js?v=2"></script>
+  <script src="dashboard.js?v=3"></script>
 </body>
 
 </html>
