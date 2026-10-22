@@ -20,6 +20,7 @@ Peer discovery and messaging MCP channel for Claude Code instances.
 - `dashboard.js` — Dashboard JavaScript (rendering, WebSocket, command palette, interactions).
 - `cli.ts` — CLI utility for inspecting broker state.
 - `broker.test.ts` — Test suite (74 tests, run with `bun test broker`).
+- `dashboard.test.ts` — Dashboard UI tests in happy-dom against a stubbed broker (run with `bun test dashboard`). Design tokens and component rules: `DESIGN.md`.
 
 ## Running
 
