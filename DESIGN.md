@@ -141,6 +141,12 @@ counts and lists by the same rule as the conversation scope.
 
 ## Performance limits
 
+The conversation renders the newest 100 messages of the current view (scope and search) and adds 100 more per "Show
+earlier" click; search counts every match. Real sessions send long messages, and all 500 that the broker returns came
+to about 36,000 elements, which took most of a second to lay out on every search. While the reader is scrolled up, the
+window keeps its first message, so new messages never remove text that is on screen. Jumping to an older message
+extends the window down to it.
+
 Messages are untrusted text (up to 64 KB). Inline markdown is parsed only on lines of up to 2,000 characters, and the
 patterns are written so a worst-case line of that length takes about 10 ms. Nesting stops at 8 levels, and excerpts
 (pins, notifications, announcements) work from the first few hundred characters only. `dashboard.test.ts` has timing

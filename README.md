@@ -106,6 +106,7 @@ Real-time peer discovery, messaging, and collaboration between Claude Code insta
 - **Nine sections** — Peers, Groups, Tasks, Active files, Activity, Decisions, Verifications, Proposals and Approvals; rail badges count what is waiting (open tasks, file conflicts, pending verifications and approvals, proposals awaiting your vote)
 - **Composer** — explicit recipient, `Enter` to send, one request per submission, the draft stays when sending fails, the 64 KB limit is checked before sending
 - **Search** — filters the conversation, counts and highlights matches
+- **Fast with long histories** — the conversation renders the newest 100 messages; **Show earlier** adds more, and jumping to a pinned message loads it
 - **Command palette** — `Ctrl+K` to jump to a section or a peer, or run an action (export, session report, theme)
 - **Dark and light themes** — dark by default, preference saved
 - **Arabic translation** — per-message translate button for peer messages
