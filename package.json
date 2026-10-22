@@ -11,6 +11,7 @@
     "test": "bun test"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^21.0.4",
     "@types/bun": "latest"
   },
   "peerDependencies": {

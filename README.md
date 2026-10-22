@@ -98,25 +98,22 @@ Real-time peer discovery, messaging, and collaboration between Claude Code insta
 
 ### Web Dashboard (http://localhost:7899)
 
-- **Premium dark glassmorphism UI** — deep navy backgrounds with ambient gradient orbs and glass-effect panels
-- **Real-time WebSocket updates** — no polling, instant state sync
-- **Chat-style message feed** with Markdown rendering, structured message badges, reactions, pin buttons
-- **Context snapshot collapsibles** — expand to see sender's branch, files, and summary on any message
-- **Sidebar with icon rail** — 8 panels: Peers, Groups, Tasks, Files, Activity, Decisions, Verifications, Proposals
-- **Collapsible sidebar** — click active rail icon to collapse, click different icon to switch panels
-- **Decisions panel** — view all decisions grouped by category
-- **Verifications panel** — track pending/verified/failed claims with status pills
-- **Proposals panel** — vote approve/reject, see progress bars and voter lists
-- **Command palette** — `Ctrl+K` for quick actions (export, theme, report, search)
-- **Keyboard shortcuts** — `/` to focus input, `Escape` to clear search
-- **Compose bar** with peer selector, auto-resizing textarea, indigo send button
-- **Dark/light theme toggle** — persisted across sessions
-- **Arabic translation** — per-message translate button for Claude messages
-- **Browser notifications** — native OS notifications when tab is in background
-- **Session reports** — generate structured markdown summaries
-- **Export chat** — download session messages as text
-- **Fully responsive** — mobile slide-over sidebar, tablet, desktop, 4K scaling
-- **LAN accessible** — open from any device on your network
+- **Coordination console layout** — section rail, resizable section panel, the conversation, and a details column for the selected peer (a drawer on narrower windows)
+- **Live updates** — state arrives over a WebSocket; while the socket is down the dashboard polls every 5 seconds and says so (Live / Reconnecting / Offline, with the time of the data on screen)
+- **Routing and delivery on every message** — sender → recipient in each peer's identity colour, then a sent → delivered → acknowledged track, or "Not delivered" with the reason when the broker reports a failed delivery
+- **Peer scope** — click a peer to see only its traffic; the composer is addressed to it and follows it when the same session reconnects (matched by process, never by name alone)
+- **Readable technical messages** — Markdown with tables, code blocks (with a copy button), task lists and links; structured messages laid out as fields; sender context on demand
+- **Nine sections** — Peers, Groups, Tasks, Active files, Activity, Decisions, Verifications, Proposals and Approvals; rail badges count what is waiting (open tasks, file conflicts, pending verifications and approvals, proposals awaiting your vote)
+- **Composer** — explicit recipient, `Enter` to send, one request per submission, the draft stays when sending fails, the 64 KB limit is checked before sending
+- **Search** — filters the conversation, counts and highlights matches
+- **Command palette** — `Ctrl+K` to jump to a section or a peer, or run an action (export, session report, theme)
+- **Dark and light themes** — dark by default, preference saved
+- **Arabic translation** — per-message translate button for peer messages
+- **Browser notifications** — native OS notifications while the tab is in the background (permission is asked on the first interaction)
+- **Session reports** — rendered in a dialog; copy or download the Markdown
+- **Export chat** — download the session's messages as text
+- **Responsive and accessible** — phone to 4K; keyboard navigation throughout, visible focus, screen-reader labels, reduced-motion support
+- **Design system** — tokens and component rules are documented in [`DESIGN.md`](DESIGN.md)
 
 ### Operational Reliability
 
@@ -131,7 +128,7 @@ Real-time peer discovery, messaging, and collaboration between Claude Code insta
 
 - **Online/away/busy/idle** status per peer (`set_status` tool)
 - **Typing indicators** — animated dots when a peer is typing
-- **Status badges** in sidebar with color coding and glow effects
+- **Status in the roster** — a presence dot on each peer plus a text label (never colour alone)
 
 ---
 
@@ -283,10 +280,11 @@ bun cli.ts kill-broker                    # Stop the broker daemon
 | -------------- | ------------------------------------- |
 | `Ctrl+K`       | Open command palette                  |
 | `/`            | Focus message input                   |
-| `Escape`       | Close palette / clear search          |
+| `Escape`       | Close palette, dialog or drawer; clear search |
 | `Enter`        | Send message (when input focused)     |
 | `Shift+Enter`  | New line in message input             |
-| `↑` `↓`        | Navigate command palette              |
+| `↑` `↓`        | Navigate command palette or the section rail |
+| `←` `→`        | Resize the section panel (when its edge is focused) |
 
 ## Dashboard Usage
 
@@ -294,10 +292,16 @@ bun cli.ts kill-broker                    # Stop the broker daemon
 
 Peers are organized into **isolation groups**. Peers in different groups cannot see or message each other.
 
-- **Create a group** — type a name in the sidebar Groups section and click "Create"
-- **Assign peers** — use the dropdown on each peer card to move them between groups
+- **Create a group** — type a name in the Groups section and click "Create"
+- **Assign peers** — select a peer, pick its group in the peer details, then press **Move**
 - **Auto-grouping** — peers on the same git branch are automatically grouped into `branch/<name>` groups
-- **Delete a group** — click × on the group header; members return to the lobby
+- **Delete a group** — click the trash icon in the Groups section and confirm; members return to the lobby
+
+### Peers and the conversation
+
+Click a peer in the Peers section to narrow the conversation to messages to or from it. The composer is addressed to that peer, and its details (summary, workspace, group, active files, tasks, reviews, recent events) open beside the conversation. Click it again, or "All traffic", to see everything. The dashboard never picks a recipient on its own: choose one in the composer or by selecting a peer.
+
+Each message shows who sent it to whom and how far delivery got: **Sent** (queued), **Delivered** (fetched by the recipient's session), **Acknowledged**. When the broker reports a failed delivery, the message shows **Not delivered** with the reason (for example, the recipient disconnected first).
 
 ### Structured Messages
 
@@ -311,7 +315,7 @@ Use `send_structured` to send typed messages. Each type enforces clarity:
 | `review_request` | file_path, description | Request specific code review |
 | `handoff` | work_completed, remaining_work, files_modified, decisions_made | Transfer work cleanly |
 
-Messages appear in the chat with color-coded type badges and expandable context snapshots.
+Messages appear in the conversation with a type badge and their fields laid out; the sender's context snapshot expands on demand.
 
 ### Decisions Board
 
@@ -327,19 +331,27 @@ Create proposals with `create_proposal` — all group peers are notified. Peers 
 
 ### Tasks
 
-The Tasks section in the sidebar shows a checkbox-style task board. Click the checkbox to mark tasks complete from the dashboard. Peers can create and assign tasks via MCP tools.
+The Tasks section lists tasks with their owner and status (Open / Done / All). Click the checkbox to mark a task complete from the dashboard; the broker notifies the task's creator. Peers can create and assign tasks via MCP tools.
 
 ### Active Files
 
-Shows which files each peer is currently editing. Files edited by multiple peers in the same group display a red **CONFLICT** badge.
+Shows which files each peer is currently editing. Files reported by more than one peer are listed first under **Conflicts**.
+
+### Approvals
+
+Lists approval requests between peers and their outcome. Approvals are answered by the designated peer with `respond_approval`; the broker does not accept approvals from the dashboard.
 
 ### Pinned Messages
 
-Click the 📌 button on any message bubble to pin it. Pinned messages appear in a dedicated bar above the chat. Click × to unpin.
+Hover a message and click the pin button (on touch screens, tap the message to show its actions). Pinned messages are listed above the conversation: **Jump** scrolls to the message, × unpins it.
 
 ### Reactions
 
-Click an existing reaction chip on a message to add your own. Peers can add reactions via the `react` MCP tool. Hover to see who reacted.
+Click a reaction chip on a message to add your own, or click it again to remove it. Peers add reactions with the `react` MCP tool. Hover to see who reacted.
+
+### Connection
+
+The top bar shows **Live** while updates stream over the WebSocket. If the connection drops, the dashboard keeps showing the last data, polls every 5 seconds, and shows a banner with the time of that data and a **Retry now** button.
 
 ### Session Reports
 
@@ -347,11 +359,15 @@ Open the command palette (`Ctrl+K`) and select "Session Report" to generate a st
 
 ### Translation
 
-Click the "AR" button on any peer message to toggle Arabic translation. Translation is UI-only — stored messages are not modified.
+Click the translate button on any peer message to show it in Arabic, and again to show the original. The text is sent to Google Translate; code blocks and inline code are kept as they are. Translation is UI-only — stored messages are not modified.
 
 ### Theme
 
-Click the sun/moon icon in the navbar to toggle dark/light mode. Preference is saved.
+Click the sun/moon icon in the top bar to toggle dark/light mode. Preference is saved.
+
+### Updating the dashboard
+
+The broker caches `dashboard.html` and `dashboard.js` for an hour. After the dashboard files change, reload once with `Ctrl+Shift+R`.
 
 ### Export
 
